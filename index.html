@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roue Libft</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --fg: #1c1c1c; --muted: #6b6b6b; --card: #ffffff;
+    --border: #e2e0d8; --accent: #00babc;
+    --p1: #00babc; --p2: #f5a623; --bonus: #9b59b6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141414; --fg: #ececec; --muted: #9a9a9a; --card: #1e1e1e; --border: #333;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 24px 16px 48px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.8rem; }
+  .sub { color: var(--muted); margin: 0 0 20px; text-align: center; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 16px; }
+  .filters label {
+    display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--card); cursor: pointer; font-size: .9rem;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .wheel-wrap { position: relative; width: min(560px, 100%); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .pointer {
+    position: absolute; top: 50%; right: -6px; transform: translateY(-50%);
+    width: 0; height: 0; border-top: 16px solid transparent; border-bottom: 16px solid transparent;
+    border-right: 30px solid var(--fg); filter: drop-shadow(0 1px 2px rgba(0,0,0,.3));
+  }
+  .controls { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; justify-content: center; }
+  button {
+    font: inherit; font-weight: 600; padding: 12px 28px; border-radius: 10px; border: none;
+    background: var(--accent); color: #fff; cursor: pointer; font-size: 1.05rem;
+  }
+  button.secondary { background: var(--card); color: var(--fg); border: 1px solid var(--border); font-size: .95rem; padding: 10px 18px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .result {
+    width: min(560px, 100%); background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 20px; min-height: 110px;
+  }
+  .result .name { font-family: ui-monospace, Consolas, monospace; font-size: 1.5rem; font-weight: 700; }
+  .result .tag { font-size: .75rem; padding: 2px 8px; border-radius: 999px; color: #fff; margin-left: 8px; vertical-align: middle; }
+  .result code { display: block; margin-top: 10px; font-family: ui-monospace, Consolas, monospace; font-size: .95rem; word-break: break-word; }
+  .result p { margin: 8px 0 0; color: var(--muted); }
+  .count { color: var(--muted); font-size: .9rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>🎡 Roue Libft</h1>
+<p class="sub">Tourne la roue et code la fonction tirée — sans regarder ta libft !</p>
+
+<div class="filters">
+  <label><input type="checkbox" data-part="1" checked><span class="dot" style="background:var(--p1)"></span>Partie 1</label>
+  <label><input type="checkbox" data-part="2" checked><span class="dot" style="background:var(--p2)"></span>Partie 2</label>
+  <label><input type="checkbox" data-part="b" checked><span class="dot" style="background:var(--bonus)"></span>Bonus</label>
+  <label><input type="checkbox" id="removeAfter">Retirer après tirage</label>
+</div>
+
+<div class="wheel-wrap">
+  <canvas id="wheel" width="1120" height="1120"></canvas>
+  <div class="pointer"></div>
+</div>
+
+<div class="controls">
+  <button id="spin">Tourner !</button>
+  <button id="reset" class="secondary">Réinitialiser</button>
+</div>
+
+<div class="result" id="result"><p>Clique sur « Tourner ! » pour tirer une fonction.</p></div>
+<div class="count" id="count"></div>
+
+<script>
+const FUNCS = [
+  // Partie 1 — fonctions de la libc
+  ["ft_isalpha",  "1", "int ft_isalpha(int c);", "Teste si c est une lettre."],
+  ["ft_isdigit",  "1", "int ft_isdigit(int c);", "Teste si c est un chiffre décimal."],
+  ["ft_isalnum",  "1", "int ft_isalnum(int c);", "Teste si c est alphanumérique."],
+  ["ft_isascii",  "1", "int ft_isascii(int c);", "Teste si c est un caractère ASCII (0–127)."],
+  ["ft_isprint",  "1", "int ft_isprint(int c);", "Teste si c est imprimable (32–126)."],
+  ["ft_strlen",   "1", "size_t ft_strlen(const char *s);", "Renvoie la longueur de la chaîne."],
+  ["ft_memset",   "1", "void *ft_memset(void *s, int c, size_t n);", "Remplit n octets de s avec c."],
+  ["ft_bzero",    "1", "void ft_bzero(void *s, size_t n);", "Met n octets de s à zéro."],
+  ["ft_memcpy",   "1", "void *ft_memcpy(void *dest, const void *src, size_t n);", "Copie n octets (zones non chevauchantes)."],
+  ["ft_memmove",  "1", "void *ft_memmove(void *dest, const void *src, size_t n);", "Copie n octets, gère le chevauchement."],
+  ["ft_strlcpy",  "1", "size_t ft_strlcpy(char *dst, const char *src, size_t size);", "Copie src dans dst avec taille max, renvoie strlen(src)."],
+  ["ft_strlcat",  "1", "size_t ft_strlcat(char *dst, const char *src, size_t size);", "Concatène avec taille max, renvoie la longueur visée."],
+  ["ft_toupper",  "1", "int ft_toupper(int c);", "Convertit en majuscule."],
+  ["ft_tolower",  "1", "int ft_tolower(int c);", "Convertit en minuscule."],
+  ["ft_strchr",   "1", "char *ft_strchr(const char *s, int c);", "Première occurrence de c dans s."],
+  ["ft_strrchr",  "1", "char *ft_strrchr(const char *s, int c);", "Dernière occurrence de c dans s."],
+  ["ft_strncmp",  "1", "int ft_strncmp(const char *s1, const char *s2, size_t n);", "Compare au plus n caractères."],
+  ["ft_memchr",   "1", "void *ft_memchr(const void *s, int c, size_t n);", "Cherche l'octet c dans n octets."],
+  ["ft_memcmp",   "1", "int ft_memcmp(const void *s1, const void *s2, size_t n);", "Compare n octets."],
+  ["ft_strnstr",  "1", "char *ft_strnstr(const char *big, const char *little, size_t len);", "Cherche little dans les len premiers caractères de big."],
+  ["ft_atoi",     "1", "int ft_atoi(const char *nptr);", "Convertit une chaîne en int."],
+  ["ft_calloc",   "1", "void *ft_calloc(size_t nmemb, size_t size);", "Alloue et initialise à zéro."],
+  ["ft_strdup",   "1", "char *ft_strdup(const char *s);", "Duplique la chaîne avec malloc."],
+  // Partie 2 — fonctions supplémentaires
+  ["ft_substr",   "2", "char *ft_substr(char const *s, unsigned int start, size_t len);", "Sous-chaîne de s à partir de start, longueur max len."],
+  ["ft_strjoin",  "2", "char *ft_strjoin(char const *s1, char const *s2);", "Nouvelle chaîne = s1 + s2."],
+  ["ft_strtrim",  "2", "char *ft_strtrim(char const *s1, char const *set);", "Retire les caractères de set au début et à la fin."],
+  ["ft_split",    "2", "char **ft_split(char const *s, char c);", "Découpe s selon le séparateur c, tableau terminé par NULL."],
+  ["ft_itoa",     "2", "char *ft_itoa(int n);", "Convertit un int en chaîne (gère INT_MIN)."],
+  ["ft_strmapi",  "2", "char *ft_strmapi(char const *s, char (*f)(unsigned int, char));", "Applique f à chaque caractère → nouvelle chaîne."],
+  ["ft_striteri", "2", "void ft_striteri(char *s, void (*f)(unsigned int, char*));", "Applique f à chaque caractère, en place."],
+  ["ft_putchar_fd","2","void ft_putchar_fd(char c, int fd);", "Écrit c sur le fd."],
+  ["ft_putstr_fd","2", "void ft_putstr_fd(char *s, int fd);", "Écrit s sur le fd."],
+  ["ft_putendl_fd","2","void ft_putendl_fd(char *s, int fd);", "Écrit s suivi d'un retour à la ligne."],
+  ["ft_putnbr_fd","2", "void ft_putnbr_fd(int n, int fd);", "Écrit l'entier n sur le fd."],
+  // Bonus — listes chaînées
+  ["ft_lstnew",   "b", "t_list *ft_lstnew(void *content);", "Crée un nouvel élément."],
+  ["ft_lstadd_front","b","void ft_lstadd_front(t_list **lst, t_list *new);", "Ajoute un élément au début."],
+  ["ft_lstsize",  "b", "int ft_lstsize(t_list *lst);", "Compte les éléments."],
+  ["ft_lstlast",  "b", "t_list *ft_lstlast(t_list *lst);", "Renvoie le dernier élément."],
+  ["ft_lstadd_back","b","void ft_lstadd_back(t_list **lst, t_list *new);", "Ajoute un élément à la fin."],
+  ["ft_lstdelone","b", "void ft_lstdelone(t_list *lst, void (*del)(void *));", "Libère un élément avec del."],
+  ["ft_lstclear", "b", "void ft_lstclear(t_list **lst, void (*del)(void *));", "Libère toute la liste, met *lst à NULL."],
+  ["ft_lstiter",  "b", "void ft_lstiter(t_list *lst, void (*f)(void *));", "Applique f au contenu de chaque élément."],
+  ["ft_lstmap",   "b", "t_list *ft_lstmap(t_list *lst, void *(*f)(void *), void (*del)(void *));", "Nouvelle liste résultant de f sur chaque contenu."],
+];
+
+const PART_LABEL = { "1": "Partie 1", "2": "Partie 2", "b": "Bonus" };
+const PART_COLORS = {
+  "1": ["#00babc", "#0097a7"],
+  "2": ["#f5a623", "#e08e0b"],
+  "b": ["#9b59b6", "#7d3c98"],
+};
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const spinBtn = document.getElementById("spin");
+const resetBtn = document.getElementById("reset");
+const resultEl = document.getElementById("result");
+const countEl = document.getElementById("count");
+const removeAfter = document.getElementById("removeAfter");
+const partBoxes = [...document.querySelectorAll("input[data-part]")];
+
+let removed = new Set();
+let angle = 0;          // rotation actuelle (rad)
+let spinning = false;
+
+function activeFuncs() {
+  const parts = partBoxes.filter(b => b.checked).map(b => b.dataset.part);
+  return FUNCS.filter(f => parts.includes(f[1]) && !removed.has(f[0]));
+}
+
+function draw() {
+  const list = activeFuncs();
+  const W = canvas.width, c = W / 2, r = c - 8;
+  ctx.clearRect(0, 0, W, W);
+  countEl.textContent = `${list.length} fonction${list.length > 1 ? "s" : ""} sur la roue`;
+  if (!list.length) {
+    ctx.fillStyle = "#888"; ctx.font = "bold 40px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("Aucune fonction", c, c);
+    spinBtn.disabled = true;
+    return;
+  }
+  spinBtn.disabled = spinning;
+  const seg = (Math.PI * 2) / list.length;
+  const fontSize = Math.max(16, Math.min(34, 900 / list.length));
+  list.forEach((f, i) => {
+    const a0 = angle + i * seg;
+    ctx.beginPath();
+    ctx.moveTo(c, c);
+    ctx.arc(c, c, r, a0, a0 + seg);
+    ctx.closePath();
+    ctx.fillStyle = PART_COLORS[f[1]][i % 2];
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.6)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(c, c);
+    ctx.rotate(a0 + seg / 2);
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#fff";
+    ctx.font = `600 ${fontSize}px ui-monospace, Consolas, monospace`;
+    ctx.fillText(f[0], r - 18, 0);
+    ctx.restore();
+  });
+  // moyeu
+  ctx.beginPath();
+  ctx.arc(c, c, 60, 0, Math.PI * 2);
+  ctx.fillStyle = "#1c1c1c";
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 30px system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("42", c, c);
+}
+
+function showResult(f) {
+  const color = PART_COLORS[f[1]][0];
+  resultEl.innerHTML = "";
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = f[0];
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.style.background = color;
+  tag.textContent = PART_LABEL[f[1]];
+  name.appendChild(tag);
+  const code = document.createElement("code");
+  code.textContent = f[2];
+  const p = document.createElement("p");
+  p.textContent = f[3];
+  resultEl.append(name, code, p);
+}
+
+function spin() {
+  const list = activeFuncs();
+  if (spinning || !list.length) return;
+  spinning = true;
+  spinBtn.disabled = true;
+
+  const seg = (Math.PI * 2) / list.length;
+  const winner = Math.floor(Math.random() * list.length);
+  // Le pointeur est à droite (angle 0). On veut que le centre du segment gagnant y arrive.
+  const jitter = (Math.random() - 0.5) * seg * 0.7;
+  const target = -(winner * seg + seg / 2) + jitter;
+  const start = angle;
+  let delta = ((target - start) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  delta += Math.PI * 2 * (5 + Math.floor(Math.random() * 3));
+  const duration = 4500;
+  const t0 = performance.now();
+
+  function frame(now) {
+    const t = Math.min(1, (now - t0) / duration);
+    const ease = 1 - Math.pow(1 - t, 4);
+    angle = start + delta * ease;
+    draw();
+    if (t < 1) return requestAnimationFrame(frame);
+    angle %= Math.PI * 2;
+    spinning = false;
+    const f = list[winner];
+    showResult(f);
+    if (removeAfter.checked) removed.add(f[0]);
+    draw();
+  }
+  requestAnimationFrame(frame);
+}
+
+spinBtn.addEventListener("click", spin);
+resetBtn.addEventListener("click", () => {
+  if (spinning) return;
+  removed.clear();
+  resultEl.innerHTML = "<p>Clique sur « Tourner ! » pour tirer une fonction.</p>";
+  draw();
+});
+partBoxes.forEach(b => b.addEventListener("change", () => { if (!spinning) draw(); }));
+document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); spin(); } });
+draw();
+</script>
+</body>
+</html>
