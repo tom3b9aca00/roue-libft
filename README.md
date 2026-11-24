@@ -1,4 +1,4 @@
-# 🎡 Roue Libft
+# 🎡 Roue Libft made by ia
 
 Une roue à tourner avec les 43 fonctions de la libft (42)
 
